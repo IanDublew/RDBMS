@@ -729,3 +729,23 @@
 [2026-01-11T04:20:41.490896] SELECT COUNT(*), SUM(amount) FROM ledger
 [2026-01-11T04:20:41.491897] SELECT COUNT(*) FROM accounts WHERE status = 'FROZEN'
 [2026-01-11T04:20:41.492896] SELECT ledger.tx_id, accounts.currency, ledger.type, ledger.amount FROM ledger JOIN accounts ON ledger.acc_id = accounts.acc_id
+[2026-01-11T04:21:52.205206] ROLLBACK
+[2026-01-11T04:21:52.206095] ROLLBACK
+[2026-01-11T04:22:03.351601] BEGIN
+[2026-01-11T04:22:03.352640] BEGIN
+[2026-01-11T04:22:13.228178] ROLLBACK
+[2026-01-11T04:22:13.229155] ROLLBACK
+[2026-01-11T04:22:55.580140] INSERT INTO users VALUES (105, 'New Client', 'TIER_1', 'CA')
+[2026-01-11T04:22:55.581139] INSERT INTO users VALUES (105, 'New Client', 'TIER_1', 'CA')
+[2026-01-11T04:30:45.293139] SELECT SUM(balance) FROM accounts WHERE currency = 'USD'
+[2026-01-11T04:30:45.294139] SELECT COUNT(*), SUM(amount) FROM ledger
+[2026-01-11T04:30:45.295136] SELECT COUNT(*) FROM accounts WHERE status = 'FROZEN'
+[2026-01-11T04:30:45.296136] SELECT ledger.tx_id, accounts.currency, ledger.type, ledger.amount FROM ledger JOIN accounts ON ledger.acc_id = accounts.acc_id
+[2026-01-11T04:35:06.682947] SELECT SUM(balance) FROM accounts WHERE currency = 'USD'
+[2026-01-11T04:35:06.684945] SELECT COUNT(*), SUM(amount) FROM ledger
+[2026-01-11T04:35:06.685947] SELECT COUNT(*) FROM accounts WHERE status = 'FROZEN'
+[2026-01-11T04:35:06.686945] SELECT ledger.tx_id, accounts.currency, ledger.type, ledger.amount FROM ledger JOIN accounts ON ledger.acc_id = accounts.acc_id
+[2026-01-11T04:35:09.244390] SELECT accounts.currency, SUM(ledger.amount) FROM ledger JOIN accounts ON ledger.acc_id = accounts.acc_id GROUP BY accounts.currency
+[2026-01-11T04:35:13.038109] SELECT * FROM users
+[2026-01-11T04:35:13.039105] SELECT * FROM users
+[2026-01-11T04:35:16.069534] SELECT currency, SUM(balance) FROM accounts GROUP BY currency

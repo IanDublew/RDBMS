@@ -1,126 +1,147 @@
-# Simple Python RDBMS
+# PyRDBMS: A Simple In-Memory Relational Database Management System
 
-A lightweight, pure-Python Relational Database Management System implemented from scratch. This project demonstrates core database concepts including storage engines, indexing strategies, SQL parsing, and Hash Joins.
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 
-It includes an interactive **REPL**, a programmatic **Python API**, and a **Flask Web Interface**.
+## Overview
 
-## 📂 Project Structure
+**PyRDBMS** is a lightweight, Python-based implementation of a simple Relational Database Management System (RDBMS). It supports basic table creation with data types, CRUD operations, primary keys, foreign keys (with integrity checks), basic indexing, and simple joins. The interface uses a SQL-like syntax and includes an interactive REPL mode for querying. Persistence is handled via pickle serialization for durability across sessions.
 
-- **`rdbms_core.py`**: The storage engine. Handles table structures, data types, `row_id` management, indexing, and basic CRUD (Create, Read, Update, Delete).
-- **`rdbms_enhanced.py`**: Extends the core with advanced features like `JOIN` operations (using Hash Join algorithm) and the Interactive REPL.
-- **`web_app.py`**: A Flask web application demonstrating the database in a real-world context (User/Order management).
-- **`examples.py`**: A CLI demonstration script showing how to use the library programmatically.
+This project was built from scratch to demonstrate core database concepts, including transaction support (`BEGIN`/`COMMIT`/`ROLLBACK` for ACID-like behavior) and query optimization via indexes and hash-joins. It aligns with the challenge requirements: declaring tables, CRUD, indexing, primary/unique keys, joining, SQL interface, REPL, and a trivial web app for CRUD demonstration.
 
-## 🚀 Getting Started
+> **Note on Credits:** This implementation is original work, inspired by standard database textbooks and Python's built-in data structures (e.g., dicts for tables/indexes). No external code was borrowed beyond standard libraries and Flask for the web app.
 
-### Prerequisites
-The core database uses only the Python Standard Library. To run the Web Interface, you need Flask.
+## Features
 
-```bash
-pip install flask
-```
+*   **Table Declaration:** Create tables with data types (`INTEGER`, `TEXT`, `REAL`, `BOOLEAN`, `DATE`) and constraints (`PRIMARY KEY`, `NOT NULL`, `FOREIGN KEY`, `UNIQUE`).
+*   **CRUD Operations:**
+    *   `CREATE TABLE`/`INDEX`
+    *   `INSERT INTO` (with FK/PK/UNIQUE validation)
+    *   `SELECT` (with `WHERE` conditions: `=`, `>`, `<`, `LIKE`; projections; aggregates: `SUM`, `COUNT`, `AVG`, `MIN`, `MAX`; `GROUP BY`)
+    *   `UPDATE` (with `WHERE`)
+    *   `DELETE` (with `WHERE`, enforcing FK integrity)
+*   **Indexing:** Hash-based indexes for faster equality lookups (e.g., on PK, UNIQUE, or manually indexed columns).
+*   **Keys:**
+    *   **Primary Key:** Uniqueness enforcement, auto-increment-like row IDs.
+    *   **Unique Key:** Fully enforced constraints preventing duplicate values.
+    *   **Foreign Key:** Referential integrity checks on `INSERT` and `DELETE`.
+*   **Joining:** `INNER JOIN` with `ON` conditions (hash-join optimized).
+*   **Transactions:** `BEGIN`, `COMMIT`, `ROLLBACK` for atomic operations via a Write-Ahead Undo Log.
+*   **REPL Mode:** Interactive SQL console with result tables and execution timing.
+*   **Persistence:** Save/load DB state to/from files using `pickle`.
+*   **Web App Demo:** A trivial Flask-based fintech ledger app showcasing CRUD via dashboard metrics and an in-browser SQL terminal.
 
-### Running the Demo
-To see the database in action via the CLI:
+### Limitations
+*   Basic parser (no subqueries or nested complex expressions).
+*   In-memory storage focus (though persistent via file serialization).
+*   Not thread-safe for high-concurrency production environments.
+
+## Requirements
+
+*   Python 3.8+
+*   **Flask** (for the web app)
+
+## Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repo-url>
+    cd py-rdbms
+    ```
+
+2.  **Install Flask:**
+    ```bash
+    pip install flask
+    ```
+
+## Usage
+
+### Running the REPL Demo (`examples.py`)
+This script demonstrates schema creation, data seeding, integrity checks, transactions, and launches the interactive REPL.
+
 ```bash
 python examples.py
 ```
 
-### Running the Web Interface
-To launch the graphical dashboard:
+*   It creates a fintech-themed DB (`customers`, `wallets`, `tx_log`).
+*   Simulates a transfer with `ROLLBACK` to demonstrate ACID compliance.
+*   Runs analytic queries (aggregates, joins).
+*   Enters **REPL mode**: Type SQL queries (e.g., `SELECT * FROM customers`) or `exit` to quit.
+
+**Example Output:**
+```text
+✓ Schema applied. Integrity constraints active.
+...
+SQL> SELECT type, COUNT(*), SUM(amount) FROM tx_log GROUP BY type
+
+TYPE    | COUNT | TOTAL VOLUME
+------------------------------
+CREDIT  |   2   | $5200.00
+DEBIT   |   1   | $5000.00
+FEE     |   2   | $300.00
+
+(Duration: 1.23ms)
+```
+
+### Running the Web App (`web_app.py`)
+A trivial Flask app for fintech ledger management, showcasing the RDBMS backend.
+
 ```bash
 python web_app.py
 ```
-Then open your browser to `http://127.0.0.1:5000`.
 
----
+Access at **[http://127.0.0.1:5000/](http://127.0.0.1:5000/)**
 
-## 💻 SQL Syntax Reference
+*   **Dashboard:** Views metrics (e.g., total USD balance via `SELECT SUM`), recent transactions (via `JOIN`).
+*   **SQL Terminal:** Execute arbitrary SQL (CRUD) in-browser. Results update the DB immediately.
+*   **Data Governance:** Lists tables; inspect raw memory rows and index structures ("God Mode").
+*   **Reset System:** Re-seeds the database to a fresh state.
 
-This RDBMS supports a subset of SQL. Commands are case-insensitive.
+> **Example:** In the SQL Terminal, run:
+> `INSERT INTO users VALUES (105, 'New Client', 'TIER_1', 'CA')`
 
-### Data Types
-- `INTEGER`
-- `REAL` (Float)
-- `TEXT`
-- `BOOLEAN`
+## Project Structure
 
-### Commands
+*   **`rdbms_core.py`**: Core RDBMS engine (Table structures, Storage, CRUD, Transaction Manager, Indexing logic).
+*   **`rdbms_enhanced.py`**: Extensions (Hash-Joins, Aggregate Pipeline, Query Optimizer, REPL class).
+*   **`examples.py`**: CLI demo script with an interactive console.
+*   **`web_app.py`**: Flask web application for visual demonstration.
+*   **`ledger.db` / `core_banking.db`**: Generated DB files (pickle-serialized).
+*   **`audit.log`**: Logs executed queries for audit trails.
 
-**1. Create Table**
-Supports Primary Keys, Unique, and Not Null constraints.
+## SQL Examples
+
+**Creating a Table**
 ```sql
-CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT UNIQUE)
+CREATE TABLE employees (
+    id INTEGER PRIMARY KEY, 
+    name TEXT NOT NULL, 
+    salary REAL, 
+    dept_id INTEGER, 
+    email TEXT UNIQUE,
+    FOREIGN KEY (dept_id) REFERENCES departments(d_id)
+)
 ```
 
-**2. Insert Data**
-Values can be quoted strings or numbers.
+**Inserting Data**
 ```sql
-INSERT INTO users VALUES (1, 'Alice Smith', 'alice@example.com')
+INSERT INTO employees VALUES (1, 'Alice', 75000.0, 101, 'alice@company.com')
 ```
 
-**3. Select Data**
-Supports standard select, filtering, and column selection.
+**Query with Join**
 ```sql
-SELECT * FROM users
-SELECT name, email FROM users WHERE id > 5
+SELECT employees.name, departments.name 
+FROM employees 
+JOIN departments ON employees.dept_id = departments.d_id
 ```
 
-**4. Joins**
-Supports `INNER JOIN` using a Hash Join algorithm.
+**Transaction with Rollback**
 ```sql
-SELECT users.name, orders.amount 
-FROM orders 
-JOIN users ON orders.user_id = users.id
+BEGIN;
+UPDATE wallets SET balance = balance - 100 WHERE w_id = 1;
+INSERT INTO tx_log VALUES (6, 1, 100.0, 'DEBIT');
+-- Something goes wrong
+ROLLBACK;
 ```
 
-**5. Update Data**
-Updates indexes automatically upon modification.
-```sql
-UPDATE users SET email = 'new@test.com' WHERE name = 'Alice'
-```
-
-**6. Delete Data**
-Removes rows and cleans up associated index pointers.
-```sql
-DELETE FROM users WHERE id = 1
-```
-
-**7. Indexing**
-Create custom indexes to speed up lookups (automatically used by the engine).
-```sql
-CREATE INDEX idx_name ON users (name)
-```
-
----
-
-## 🧠 Architecture & Design
-
-### Storage Model
-Unlike simple implementations that use Lists (where deletion shifts all indices), this RDBMS uses a **Dictionary-based storage** model:
-- **Structure:** `Dict[row_id, List[values]]`
-- **Benefit:** Deleting a row is O(1) and strictly stable. A row ID never changes, ensuring index pointers remain valid without expensive reshuffling.
-
-### Indexing Strategy
-Indexes are implemented as `Dict[Value, Set[row_ids]]`.
-- **Primary Keys:** Enforce uniqueness and allow O(1) lookup.
-- **Secondary Indexes:** Allow fast filtering.
-- **Maintenance:** The `insert`, `update`, and `delete` methods automatically hook into the index manager to ensure indexes are never stale (dangling pointers).
-
-### Join Algorithm
-The `rdbms_enhanced.py` implements a **Hash Join**:
-1.  **Build Phase:** It scans the right-side table and builds a hash map: `{ join_key: [rows] }`.
-2.  **Probe Phase:** It scans the left-side table one by one.
-3.  **Match:** It looks up the key in the hash map.
-4.  **Complexity:** O(M + N) — significantly faster than the O(M * N) Nested Loop join often found in simple toy databases.
-
-### Persistence
-The database supports `save()` and `load()` methods using Python's `pickle` module to serialize the entire database state (schema, data, and indexes) to disk.
-
----
-
-## ⚠️ Limitations
-*   **Transactions:** No ACID compliance (Atomicity, Consistency, Isolation, Durability).
-*   **Concurrency:** Not thread-safe.
-*   **Memory:** The entire database resides in RAM.
-*   **Parsing:** The Regex-based parser is strict; complex nested queries or subqueries are not supported."# RDBMS" 
+## Contributing
+Feel free to fork and submit PRs for improvements, such as advanced SQL parsing (nested queries) or expanded data types.

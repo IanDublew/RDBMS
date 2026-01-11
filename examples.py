@@ -66,7 +66,8 @@ def run_fintech_demo():
     
     print("\n[2.1] SECURITY TEST: Attempting to create wallet for ghost user...")
     try:
-        db.execute("INSERT INTO wallets VALUES (99, 999, 'USD', 0.00)")
+        res = db.execute("INSERT INTO wallets VALUES (99, 999, 'USD', 0.00)")
+        if res.get('status') == 'error': raise Exception(res['message'])
     except Exception as e:
         print(f"🛡️  BLOCKED: {e}")
         print("   (System successfully prevented orphan record creation)")
@@ -85,9 +86,8 @@ def run_fintech_demo():
     db.execute("INSERT INTO tx_log VALUES (5001, 1, 50000.00, 'DEBIT')")
     print("... Debited Stark Wallet ...")
     
-    # 2. Simulating Network Failure / Logic Error before Credit
+    # 2. Simulating Network Failure
     print("... ⚠️  CRITICAL ERROR: DESTINATION WALLET API TIMEOUT ...")
-    print("... System State is now inconsistent (Money left A, didn't arrive at B) ...")
     
     print("\n[3.1] EXECUTING EMERGENCY ROLLBACK")
     db.execute("ROLLBACK")
@@ -96,8 +96,9 @@ def run_fintech_demo():
     # Verify Balances
     print("\n[3.2] Auditing Stark Wallet Balance:")
     res = db.execute("SELECT balance FROM wallets WHERE w_id = 1")
-    print(f"   Expected: 1000000.0 | Actual: {res['rows'][0][0]}")
-    if res['rows'][0][0] == 1000000.0:
+    val = res['rows'][0][0]
+    print(f"   Expected: 1000000.0 | Actual: {val}")
+    if val == 1000000.0:
         print("   ✅ FUNDS SAFE. No money was lost.")
 
     # ---------------------------------------------------------
@@ -117,8 +118,9 @@ def run_fintech_demo():
     
     print("\nTYPE    | COUNT | TOTAL VOLUME")
     print("-" * 30)
-    for row in res['rows']:
-        print(f"{row[0]:<7} |   {row[1]}   | ${row[2]:,.2f}")
+    if 'rows' in res:
+        for row in res['rows']:
+            print(f"{row[0]:<7} |   {row[1]}   | ${row[2]:,.2f}")
 
     print("\nQuery: Wealthiest Customers (JOIN Wallets -> Customers)")
     res = db.execute("""
@@ -126,8 +128,9 @@ def run_fintech_demo():
         FROM wallets 
         JOIN customers ON wallets.c_id = customers.c_id
     """)
-    for r in res['rows']:
-        print(f" - {r[0]}: {r[2]:,.2f} {r[1]}")
+    if 'rows' in res:
+        for r in res['rows']:
+            print(f" - {r[0]}: {r[2]:,.2f} {r[1]}")
 
     # ---------------------------------------------------------
     # 5. CONSOLE

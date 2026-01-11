@@ -4,7 +4,7 @@ import os
 import pickle
 import datetime
 from enum import Enum
-from typing import Dict, List, Any, Set, Union, Optional, Tuple
+from typing import Dict, List, Any, Set, Tuple
 
 class DataType(Enum):
     INTEGER = "INTEGER"
@@ -48,13 +48,13 @@ class Table:
         self.row_id_counter = 1
         self.column_map = {col['name']: idx for idx, col in enumerate(columns)}
         
-        # Identify Unique Columns (excluding PK which is handled separately)
+        # Unique Columns (Non-PK)
         self.unique_columns = []
         for col in columns:
-            if Constraint.UNIQUE in col['constraints'] and (not primary_key or col['name'] not in primary_key):
+            is_pk = primary_key and len(primary_key) == 1 and primary_key[0] == col['name']
+            if Constraint.UNIQUE in col['constraints'] and not is_pk:
                 self.unique_columns.append(col['name'])
         
-        # Initialize System Indexes
         if primary_key: self.indexes['__pk__'] = {}
         for col in self.unique_columns:
             self.indexes[f"__uniq_{col}"] = {}
@@ -63,22 +63,31 @@ class Table:
         if len(values) != len(self.columns): raise ValueError(f"Column count mismatch in {self.name}")
         validated = [self._validate(c, v) for c, v in zip(self.columns, values)]
 
-        # 1. Primary Key Check
+        # 1. PK Check
         if self.primary_key:
             pk_val = validated[self.column_map[self.primary_key[0]]]
             if pk_val in self.indexes.get('__pk__', {}): raise ValueError(f"Primary Key violation: {pk_val}")
 
-        # 2. Unique Constraint Check
+        # 2. Unique Check
         for col in self.unique_columns:
             val = validated[self.column_map[col]]
             if val is not None:
-                if val in self.indexes[f"__uniq_{col}"]:
-                    raise ValueError(f"UNIQUE constraint violation: {col}='{val}' already exists")
+                idx_name = f"__uniq_{col}"
+                if val in self.indexes[idx_name]:
+                    raise ValueError(f"UNIQUE constraint violation: Column '{col}' value '{val}' already exists")
 
+        # 3. Row ID Resolution
         final_id = row_id if row_id is not None else self.row_id_counter
+        
+        # Ensure we don't overwrite if manual ID was passed that conflicts with counter logic (rare collision check)
+        if final_id in self.rows:
+             raise ValueError(f"System Error: Row ID {final_id} already occupied.")
+
         self.rows[final_id] = validated
-        if row_id is None: self.row_id_counter += 1
-        elif row_id >= self.row_id_counter: self.row_id_counter = row_id + 1
+        
+        # Advance counter if we used it or surpassed it
+        if final_id >= self.row_id_counter:
+            self.row_id_counter = final_id + 1
         
         self._update_indexes(final_id, validated)
         return final_id
@@ -91,17 +100,16 @@ class Table:
     def update_row(self, row_id: int, new_values: List[Any]):
         if row_id not in self.rows: return
         
-        # Unique Check (skip if value hasn't changed or is this row)
+        # Unique Check on Update
         for col in self.unique_columns:
             col_idx = self.column_map[col]
             val = new_values[col_idx]
             if val is not None:
                 idx_name = f"__uniq_{col}"
                 if val in self.indexes[idx_name]:
-                    # Check if the existing value belongs to a DIFFERENT row
                     existing_ids = self.indexes[idx_name][val]
                     if row_id not in existing_ids:
-                         raise ValueError(f"UNIQUE constraint violation: {col}='{val}'")
+                         raise ValueError(f"UNIQUE constraint violation: Column '{col}' value '{val}' already exists")
 
         self._remove_from_indexes(row_id, self.rows[row_id])
         self.rows[row_id] = new_values
@@ -117,19 +125,17 @@ class Table:
             if t == 'INTEGER': return int(val)
             if t == 'REAL': return float(val)
             if t == 'TEXT': return str(val)
-            if t == 'BOOLEAN': return str(val).upper() == 'TRUE'
+            if t == 'BOOLEAN': return str(val).upper() == 'TRUE' if isinstance(val, str) else bool(val)
             if t == 'DATE': return str(val)
         except: raise ValueError(f"Type mismatch: {val} is not {t}")
         return val
 
     def _update_indexes(self, row_id: int, values: List[Any]):
-        # PK
         if self.primary_key:
             pk_val = values[self.column_map[self.primary_key[0]]]
             if '__pk__' not in self.indexes: self.indexes['__pk__'] = {}
             self.indexes['__pk__'][pk_val] = {row_id}
         
-        # Unique
         for col in self.unique_columns:
             val = values[self.column_map[col]]
             if val is not None:
@@ -137,7 +143,6 @@ class Table:
                 if val not in idx: idx[val] = set()
                 idx[val].add(row_id)
 
-        # General
         for name, data in self.indexes.items():
             if name.startswith('__'): continue
             col = name.replace("idx_", "")
@@ -147,7 +152,6 @@ class Table:
                 data[val].add(row_id)
 
     def _remove_from_indexes(self, row_id: int, values: List[Any]):
-        # Helper to find which col matches which index
         for name, data in self.indexes.items():
             col = None
             if name == '__pk__': col = self.primary_key[0]
@@ -162,12 +166,10 @@ class Table:
 
     def select(self, conditions: List[Tuple] = None) -> List[Tuple[int, List[Any]]]:
         results = []
-        # Optimization: Check if Primary Key is in conditions with '='
         pk_lookup = False
         if conditions and self.primary_key:
             for col, op, val in conditions:
                 if col == self.primary_key[0] and op == '=':
-                    # Index Seek
                     idx = self.indexes.get('__pk__', {})
                     if val in idx:
                         for rid in idx[val]:
@@ -175,10 +177,7 @@ class Table:
                                 results.append((rid, self.rows[rid]))
                     pk_lookup = True
                     break
-        
         if pk_lookup: return results
-
-        # Full Scan
         for rid, row in self.rows.items():
             if self._match(row, conditions): results.append((rid, row))
         return results
@@ -221,7 +220,7 @@ class SimpleRDBMS:
             q = " ".join(query.strip().split())
             if not q: return {'status': 'error', 'message': 'Empty query'}
             
-            self._log_query(q) # Audit Log
+            self._log_query(q)
             
             cmd = q.split(' ')[0].upper()
             if cmd == "BEGIN": 
@@ -239,18 +238,13 @@ class SimpleRDBMS:
             if cmd == "DROP": return self._drop(q)
             
             return {'status': 'error', 'message': f"Unknown command: {cmd}"}
-        except ValueError as ve:
-            return {'status': 'error', 'message': f"Syntax/Value Error: {str(ve)}"}
-        except AttributeError:
-             return {'status': 'error', 'message': "Invalid SQL Syntax. Please check your command structure."}
         except Exception as e:
-            return {'status': 'error', 'message': f"System Error: {str(e)}"}
+            return {'status': 'error', 'message': f"Error: {str(e)}"}
 
     def _log_query(self, q):
         try:
             with open("audit.log", "a") as f:
-                ts = datetime.datetime.now().isoformat()
-                f.write(f"[{ts}] {q}\n")
+                f.write(f"[{datetime.datetime.now().isoformat()}] {q}\n")
         except: pass
 
     def _rollback(self):
@@ -316,9 +310,17 @@ class SimpleRDBMS:
                         if str(r[ridx]) == str(val): found = True; break
                 if not found: raise ValueError(f"FK Integrity Error: {val} not in {fk['ref_table']}")
 
-        rid = t.insert(vals)
-        self.trx.log_insert(tn, rid)
-        return {'status': 'success', 'row_id': rid}
+        # --- FIX: Use PK as Row ID if Integer ---
+        rid = None
+        if t.primary_key:
+            pk_idx = t.column_map[t.primary_key[0]]
+            pk_val = vals[pk_idx]
+            if isinstance(pk_val, int):
+                rid = pk_val
+
+        final_rid = t.insert(vals, row_id=rid)
+        self.trx.log_insert(tn, final_rid)
+        return {'status': 'success', 'row_id': final_rid}
 
     def _delete(self, q):
         m = re.match(r"DELETE FROM (\w+)(?:\s+WHERE\s+(.*))?", q, re.IGNORECASE)
@@ -345,7 +347,14 @@ class SimpleRDBMS:
         m = re.match(r"UPDATE (\w+) SET (.*?)(?:\s+WHERE\s+(.*))?", q, re.IGNORECASE)
         tn, sstr, where = m.groups()
         t = self.tables[tn]
-        ups = {k.strip(): self._val(v) for k,v in [x.split('=') for x in sstr.split(',')]}
+        
+        # --- FIX: Robust Parsing ---
+        ups = {}
+        for x in sstr.split(','):
+            parts = x.split('=', 1)
+            if len(parts) != 2: raise ValueError(f"Invalid SET clause: '{x}'")
+            ups[parts[0].strip()] = self._val(parts[1])
+
         rows = t.select(self._parse_where(where))
         for rid, row in rows:
             self.trx.log_update(tn, rid, row[:])
@@ -390,12 +399,9 @@ class SimpleRDBMS:
         return [self._val(x) for x in args]
 
     def _parse_where(self, s) -> List[Tuple]:
-        """Parses 'col=val AND col2>val' into list of tuples"""
         if not s: return []
         conds = []
-        # Split by AND (keep simple)
         parts = s.split(' AND ') if ' AND ' in s else [s]
-        
         ops = ['>=', '<=', '=', '>', '<', 'LIKE']
         for p in parts:
             matched = False
@@ -405,7 +411,6 @@ class SimpleRDBMS:
                     conds.append((l.strip(), op, self._val(r)))
                     matched = True
                     break
-            if not matched: raise ValueError(f"Invalid condition syntax: {p}")
         return conds
 
     def save(self, p=None):
